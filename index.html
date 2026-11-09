@@ -195,7 +195,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.2.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.3.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
@@ -233,7 +233,7 @@ async function tout() {
     sb.from("eleves").select("*").order("nom"),
     sb.from("soldes").select("*").order("nom"),
     sb.from("paiements").select("*").order("date", { ascending: false }).order("cree_le", { ascending: false }).limit(40),
-    sb.from("cours").select("*").order("debut", { ascending: false }).limit(60),
+    sb.from("cours").select("*").order("debut", { ascending: false }).limit(500),
   ]);
   const err = e.error || s.error || p.error || c.error;
   if (err) { toast("Erreur de chargement : " + err.message); return; }
@@ -302,9 +302,34 @@ $("#fPaie").addEventListener("submit", async (e) => {
 });
 
 /* ───────── cours ───────── */
+/* Répartition des paiements : les sommes reçues paient les cours dans l'ordre chronologique (le plus ancien d'abord). */
+function prixCours(c, e) {
+  if (c.montant_cents != null) return c.montant_cents;
+  if (!e || e.tarif_cents == null) return 0;
+  return e.tarif_unite === "cours" ? e.tarif_cents : Math.round(e.tarif_cents * c.duree_min / 60);
+}
+function etatsPaiement() {
+  const etats = {}, maintenant = Date.now();
+  for (const e of eleves) {
+    let reste = soldes.find((s) => s.eleve_id === e.id)?.recu_cents ?? 0;
+    const compte = cours.filter((c) => c.eleve_id === e.id && c.statut !== "annule" && c.facture
+      && (!e.depart || new Date(c.debut).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }) >= e.depart))
+      .sort((a, b) => new Date(a.debut) - new Date(b.debut));
+    for (const c of compte) {
+      const prix = prixCours(c, e), futur = new Date(c.debut).getTime() >= maintenant && c.statut === "prevu";
+      if (prix <= 0) { etats[c.id] = { t: "—", k: "" }; continue; }
+      if (reste >= prix) { etats[c.id] = { t: futur ? "Payé d'avance" : "Payé", k: "ok" }; reste -= prix; }
+      else if (reste > 0) { etats[c.id] = { t: `Payé en partie (${eur(reste)} / ${eur(prix)})`, k: "warn" }; reste = 0; }
+      else etats[c.id] = { t: futur ? "À payer" : "Pas payé", k: futur ? "" : "err" };
+    }
+  }
+  return etats;
+}
+
 function dessinerCours() {
   const l = $("#listeCours");
   const maintenant = Date.now();
+  const paie = etatsPaiement();
   l.innerHTML = cours.length ? cours.map((c) => {
     const passe = new Date(c.debut).getTime() < maintenant;
     let etat = c.statut === "annule" ? `<span class="chip err">Annulé</span>`
@@ -312,7 +337,7 @@ function dessinerCours() {
       : (c.statut === "fait" || passe) ? `<span class="chip ok">Donné</span>` : `<span class="chip">Prévu</span>`;
     return `<button class="item" style="width:100%;background:none;border:0;border-top:1px solid var(--line);text-align:left;color:inherit" data-cours="${c.id}">
       <div><div class="t">${esc(nomEleve(c.eleve_id))}</div><div class="m">${jour(c.debut)} · ${heure(c.debut)} · ${c.duree_min} min${c.note ? " · " + esc(c.note) : ""}</div></div>
-      <div style="text-align:right">${etat}${c.montant_cents != null ? `<div class="m">${eur(c.montant_cents)}</div>` : ""}</div></button>`;
+      <div style="text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end">${etat}${paie[c.id] && paie[c.id].t !== "—" ? `<span class="chip ${paie[c.id].k}">${esc(paie[c.id].t)}</span>` : ""}${c.montant_cents != null ? `<div class="m">${eur(c.montant_cents)}</div>` : ""}</div></button>`;
   }).join("") : `<div class="empty">Aucun cours pour l'instant. Ils arrivent depuis ton calendrier à la prochaine synchro du Mac.</div>`;
 }
 $("#listeCours").addEventListener("click", (e) => { const b = e.target.closest("[data-cours]"); if (b) ouvrirCours(cours.find((c) => c.id === b.dataset.cours)); });
