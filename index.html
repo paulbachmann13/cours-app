@@ -195,7 +195,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.1.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.2.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
@@ -266,7 +266,8 @@ function dessinerPaiements() {
       <div class="chips"><span class="chip">Dû : ${eur(s.du_cents)}</span><span class="chip ok">Reçu : ${eur(s.recu_cents)}</span>
       <span class="chip">${s.nb_cours_factures} cours · ${Number(s.heures_facturees)} h</span>
       ${sansTarif ? `<span class="chip warn">Tarif non renseigné : ouvre « ⚙︎ Tarifs »</span>` : `<span class="chip">${eur(el_.tarif_cents)} / ${el_.tarif_unite === "cours" ? "cours" : "heure"}</span>`}
-      ${el_.payeur ? `<span class="chip">${esc(el_.payeur)}</span>` : ""}</div></div>`;
+      ${el_.payeur ? `<span class="chip">${esc(el_.payeur)}</span>` : ""}
+      ${el_.depart ? `<span class="chip">depuis le ${new Date(el_.depart + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>` : ""}</div></div>`;
   }).join("");
   $("#sousTitre").textContent = "";
   const l = $("#listePaie");
@@ -350,7 +351,8 @@ $("#btnRegl").addEventListener("click", () => {
   $("#reglListe").innerHTML = eleves.map((e) => `<div class="card" style="margin:0" data-regl="${esc(e.id)}"><div class="eleve-nom">${esc(e.nom)}</div>
     <div class="two" style="margin-top:8px"><label>Tarif (€)<input data-f="tarif" type="number" inputmode="decimal" min="0" step="0.01" value="${e.tarif_cents != null ? e.tarif_cents / 100 : ""}"></label>
     <label>Par<select data-f="unite"><option value="heure"${e.tarif_unite === "heure" ? " selected" : ""}>heure</option><option value="cours"${e.tarif_unite === "cours" ? " selected" : ""}>cours</option></select></label></div>
-    <label style="margin-top:8px">Qui paie<input data-f="payeur" type="text" maxlength="80" value="${esc(e.payeur || "")}" placeholder="Parents, l'élève…"></label></div>`).join("");
+    <label style="margin-top:8px">Qui paie<input data-f="payeur" type="text" maxlength="80" value="${esc(e.payeur || "")}" placeholder="Parents, l'élève…"></label>
+    <label style="margin-top:8px">Compter les cours à partir du<input data-f="depart" type="date" value="${esc(e.depart || "")}"></label></div>`).join("");
   $("#dlgRegl").showModal();
 });
 $("#fRegl").addEventListener("submit", async (ev) => {
@@ -360,6 +362,7 @@ $("#fRegl").addEventListener("submit", async (ev) => {
     const { error } = await sb.from("eleves").update({
       tarif_cents: t === "" ? null : Math.round(parseFloat(t.replace(",", ".")) * 100),
       tarif_unite: bloc.querySelector('[data-f="unite"]').value, payeur: bloc.querySelector('[data-f="payeur"]').value.trim() || null,
+      depart: bloc.querySelector('[data-f="depart"]').value || null,
     }).eq("id", bloc.dataset.regl);
     if (error) { $("#reglErr").textContent = "Erreur : " + error.message; return; }
   }
