@@ -132,6 +132,8 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
         <button class="btn primary small" id="btnPaie">+ Paiement</button>
       </div>
       <div class="card liste" id="listePaie"></div>
+      <h2>Récap par mois</h2>
+      <div id="recapMois"></div>
     </section>
 
     <section id="p-cours" role="tabpanel" class="hide">
@@ -207,7 +209,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.4.1"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.5.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
@@ -292,13 +294,13 @@ async function tout() {
   const [e, s, p, c] = await Promise.all([
     sb.from("eleves").select("*").order("nom"),
     sb.from("soldes").select("*").order("nom"),
-    sb.from("paiements").select("*").order("date", { ascending: false }).order("cree_le", { ascending: false }).limit(40),
+    sb.from("paiements").select("*").order("date", { ascending: false }).order("cree_le", { ascending: false }).limit(2000),
     sb.from("cours").select("*").order("debut", { ascending: false }).limit(500),
   ]);
   const err = e.error || s.error || p.error || c.error;
   if (err) { toast("Erreur de chargement : " + err.message); return; }
   eleves = e.data; soldes = s.data; paiements = p.data; cours = c.data;
-  dessinerPaiements(); dessinerCours(); remplirSelects();
+  dessinerPaiements(); dessinerRecap(); dessinerCours(); remplirSelects();
 }
 const nomEleve = (id) => eleves.find((x) => x.id === id)?.nom ?? id;
 
@@ -331,7 +333,7 @@ function dessinerPaiements() {
   }).join("");
   $("#sousTitre").textContent = "";
   const l = $("#listePaie");
-  l.innerHTML = paiements.length ? paiements.map((p) => `<div class="item"><div><div class="t">${esc(nomEleve(p.eleve_id))} · ${p.type === "avance" ? "d'avance" : "après cours"}</div>
+  l.innerHTML = paiements.length ? paiements.slice(0, 25).map((p) => `<div class="item"><div><div class="t">${esc(nomEleve(p.eleve_id))} · ${p.type === "avance" ? "d'avance" : "après cours"}</div>
     <div class="m">${jour(p.date)}${p.mode ? " · " + esc(p.mode) : ""}${p.note ? " · " + esc(p.note) : ""}</div></div>
     <div style="text-align:right"><div class="montant">${eur(p.montant_cents)}</div><button class="btn small danger" data-suppr-paie="${p.id}" aria-label="Supprimer ce paiement">Supprimer</button></div></div>`).join("")
     : `<div class="empty">Aucun paiement enregistré.</div>`;
@@ -360,6 +362,31 @@ $("#fPaie").addEventListener("submit", async (e) => {
   if (error) { $("#paieErr").textContent = "Erreur : " + error.message; return; }
   $("#dlgPaie").close(); toast("Paiement enregistré"); await tout();
 });
+
+/* ───────── récap par mois ─────────
+   « Gagné » = valeur des cours donnés dans le mois (au tarif de l'élève) ; « Encaissé » = virements reçus datés du mois ;
+   pour le mois en cours, « À venir » = cours encore prévus d'ici la fin du mois. Indépendant de la date de départ des comptes. */
+function dessinerRecap() {
+  const moisDe = (d) => new Date(d).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }).slice(0, 7);
+  const maintenant = Date.now(), mois = {};
+  const m = (k) => (mois[k] ??= { gagne: 0, avenir: 0, encaisse: 0, nb: 0, minutes: 0, parEleve: {} });
+  for (const c of cours) {
+    if (c.statut === "annule" || !c.facture) continue;
+    const e = eleves.find((x) => x.id === c.eleve_id), prix = prixCours(c, e), k = moisDe(c.debut), futur = c.statut === "prevu" && new Date(c.debut).getTime() >= maintenant;
+    if (futur) { m(k).avenir += prix; continue; }
+    const r = m(k); r.gagne += prix; r.nb++; r.minutes += c.duree_min;
+    const pe = (r.parEleve[c.eleve_id] ??= { gagne: 0, nb: 0 }); pe.gagne += prix; pe.nb++;
+  }
+  for (const p of paiements) m(p.date.slice(0, 7)).encaisse += p.montant_cents;
+  const cles = Object.keys(mois).sort().reverse().slice(0, 12), courant = moisDe(new Date());
+  $("#recapMois").innerHTML = cles.length ? cles.map((k) => {
+    const r = mois[k], nom = new Date(k + "-15T12:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    const detail = Object.entries(r.parEleve).map(([id, v]) => `<span class="chip">${esc(nomEleve(id))} : ${eur(v.gagne)} (${v.nb} cours)</span>`).join("");
+    return `<div class="card"><div class="row"><div class="eleve-nom" style="text-transform:capitalize">${esc(nom)}${k === courant ? ` <span class="chip warn">en cours</span>` : ""}</div></div>
+      <div class="solde" style="font-size:24px">${eur(r.gagne)}</div><div class="sub">gagnés avec ${r.nb} cours · ${(r.minutes / 60).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} h${r.avenir > 0 ? ` · ${eur(r.avenir)} encore prévus ce mois-ci` : ""}</div>
+      <div class="chips"><span class="chip ok">Encaissé ce mois : ${eur(r.encaisse)}</span>${detail}</div></div>`;
+  }).join("") : `<div class="card empty">Pas encore de cours.</div>`;
+}
 
 /* ───────── cours ───────── */
 /* Répartition des paiements : les sommes reçues paient les cours dans l'ordre chronologique (le plus ancien d'abord). */
