@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>if(!location.search.includes("snap")) document.write('<meta http-equiv="refresh" content="20">');</script>
+<title>Salle de contrôle</title>
+<style>
+:root{
+  --bg:#f4f1ea; --panel:#fffdf8; --ink:#25221c; --muted:#7a7468; --line:#ddd6c6;
+  --ok:#2f8f5b; --ok-bg:#e3f3ea; --err:#c23a2b; --err-bg:#fbe5e1; --work:#b7791f; --work-bg:#fbefd2;
+  --wait:#5b5fc7; --wait-bg:#e8e9fb; --idle:#8d877a; --idle-bg:#ece8dd; --shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px rgba(60,50,20,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#17150f; --panel:#211e16; --ink:#f0ebdd; --muted:#a39c8a; --line:#3a3528;
+    --ok:#5fd18d; --ok-bg:#183b29; --err:#ff8070; --err-bg:#4a211c; --work:#f0b955; --work-bg:#4a3a14;
+    --wait:#9ea2ff; --wait-bg:#272a56; --idle:#a39c8a; --idle-bg:#2d291e; --shadow:none; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding:20px clamp(16px,4vw,40px) 8px}
+h1{margin:0;font-size:22px;letter-spacing:-.2px}
+.sub{color:var(--muted);font-size:13px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel)}
+.badge.test{color:var(--work);background:var(--work-bg);border-color:transparent}
+.badge.live{color:var(--ok);background:var(--ok-bg);border-color:transparent}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;padding:12px clamp(16px,4vw,40px) 32px}
+@media (max-width:980px){main{grid-template-columns:1fr}}
+.map{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px 18px 26px;box-shadow:var(--shadow);
+  background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+.row{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;position:relative;z-index:1;margin:0 0 30px}
+.row:last-child{margin-bottom:0}
+svg.links{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+svg.links line{stroke:var(--line);stroke-width:2;stroke-dasharray:5 6}
+.zone{width:100%;text-align:center;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;position:relative;z-index:1}
+.agent{width:176px;background:var(--bg);border:2px solid var(--line);border-radius:16px;padding:12px 12px 14px;text-align:center;transition:border-color .3s}
+.agent .av{height:74px;display:flex;justify-content:center;align-items:flex-end}
+.agent .name{font-weight:700;margin-top:6px}
+.agent .role{font-size:12px;color:var(--muted)}
+.pill{margin:10px auto 0;display:inline-block;max-width:100%;padding:5px 10px;border-radius:12px;font-size:12.5px;font-weight:600;line-height:1.3}
+.pill small{display:block;font-weight:400;opacity:.85}
+.s-ok{border-color:var(--ok)} .s-ok .pill{background:var(--ok-bg);color:var(--ok)}
+.s-erreur{border-color:var(--err)} .s-erreur .pill{background:var(--err-bg);color:var(--err)}
+.s-travaille{border-color:var(--work)} .s-travaille .pill{background:var(--work-bg);color:var(--work)}
+.s-repos .pill{background:var(--idle-bg);color:var(--idle)}
+.s-attente{border-color:var(--wait)}
+.s-travaille .av svg{animation:bob .7s ease-in-out infinite}
+.s-erreur .av svg{animation:shake .5s ease-in-out 2}
+.s-repos .av svg{opacity:.7}
+@keyframes bob{50%{transform:translateY(-6px)}}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.tags{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:8px}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:999px;font-weight:600}
+.tag.wait{background:var(--wait-bg);color:var(--wait)}
+.tag.abs{background:var(--idle-bg);color:var(--idle)}
+.tag.att{background:var(--work-bg);color:var(--work)}
+aside .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:var(--shadow);margin-bottom:16px}
+aside h2{margin:0 0 10px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ev{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.ev:first-of-type{border-top:0}
+.dot{flex:none;width:9px;height:9px;border-radius:50%;margin-top:6px}
+.d-ok{background:var(--ok)}.d-erreur{background:var(--err)}.d-travaille{background:var(--work)}
+.ev .t{color:var(--muted);font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12.5px;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px}
+footer{padding:0 clamp(16px,4vw,40px) 28px;color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Salle de contrôle · Cours particuliers</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div id="badges"></div>
+</header>
+<main>
+  <section class="map" id="map" aria-label="Carte des agents"></section>
+  <aside>
+    <div class="card"><h2>Activité récente</h2><div id="feed"></div></div>
+    <div class="card"><h2>Légende</h2>
+      <div class="legend"><span>⚙ au travail</span><span>✔ tâche effectuée</span><span>⚠ erreur</span><span>⏳ attend ta validation</span><span>💤 au repos</span><span>🧳 élève absent</span></div>
+    </div>
+  </aside>
+</main>
+<footer id="foot"></footer>
+
+<script>
+const DATA = /*DATA*/null;
+
+const COULEURS = {chef:"#3d5a80", courrier:"#c1666b", messages:"#4a9d8f", calendrier:"#d99a3d", relecteur:"#7a5c99", eleve:"#5b8c5a", test:"#9a9486"};
+
+function avatar(couleur, accessoire){
+  const hat = accessoire==="toque"
+    ? '<rect x="18" y="4" width="28" height="7" rx="2" fill="#25221c"/><rect x="29" y="0" width="6" height="6" fill="#25221c"/>'
+    : accessoire==="cravate" ? '<path d="M32 40 l-3 6 3 14 3-14z" fill="#c23a2b"/>'
+    : accessoire==="loupe" ? '<circle cx="48" cy="44" r="6" fill="none" stroke="#25221c" stroke-width="2.4"/><line x1="52" y1="49" x2="58" y2="56" stroke="#25221c" stroke-width="2.6"/>'
+    : accessoire==="enveloppe" ? '<rect x="40" y="42" width="18" height="12" rx="2" fill="#fffdf8" stroke="#25221c" stroke-width="1.6"/><path d="M40 43 l9 6 9-6" fill="none" stroke="#25221c" stroke-width="1.6"/>'
+    : accessoire==="bulle" ? '<path d="M38 40h20a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-9l-5 5v-5h-6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z" fill="#fffdf8" stroke="#25221c" stroke-width="1.6"/>'
+    : accessoire==="agenda" ? '<rect x="40" y="40" width="18" height="16" rx="2" fill="#fffdf8" stroke="#25221c" stroke-width="1.6"/><line x1="40" y1="46" x2="58" y2="46" stroke="#25221c" stroke-width="1.6"/>'
+    : '';
+  return `<svg width="64" height="70" viewBox="0 0 64 70" role="img" aria-hidden="true">
+    <ellipse cx="32" cy="67" rx="17" ry="3" fill="rgba(0,0,0,.12)"/>
+    <rect x="16" y="38" width="32" height="26" rx="9" fill="${couleur}"/>
+    <rect x="20" y="12" width="24" height="26" rx="10" fill="#f2c9a0"/>
+    <circle cx="27" cy="26" r="2.3" fill="#25221c"/><circle cx="37" cy="26" r="2.3" fill="#25221c"/>
+    <path d="M27 32 q5 4 10 0" fill="none" stroke="#25221c" stroke-width="2" stroke-linecap="round"/>
+    ${hat}</svg>`;
+}
+
+const SNAP = location.search.includes("snap");
+function il_y_a(iso){
+  if(!iso) return "";
+  if(SNAP){ const d = new Date(iso); return "le " + d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"}) + " à " + d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}); }
+  const s = (Date.now() - new Date(iso).getTime())/1000;
+  if(s < 90) return "à l'instant";
+  if(s < 3600) return `il y a ${Math.round(s/60)} min`;
+  if(s < 86400) return `il y a ${Math.round(s/3600)} h`;
+  return `il y a ${Math.round(s/86400)} j`;
+}
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function carte(id, nom, role, couleur, acc, extra){
+  const st = (DATA.statuts||{})[id];
+  let etat = "repos", pill = "💤 Au repos", det = "";
+  if(st){
+    const age = (Date.now() - new Date(st.at).getTime())/60000;
+    if(st.statut === "travaille" && age > 40){ etat = "erreur"; pill = "⚠ Bloqué ?"; det = `${st.detail} · ${il_y_a(st.at)}`; }
+    else if(st.statut === "travaille"){ etat = "travaille"; pill = "⚙ En cours"; det = st.detail; }
+    else if(st.statut === "erreur"){ etat = "erreur"; pill = "⚠ Erreur"; det = `${st.detail} · ${il_y_a(st.at)}`; }
+    else { etat = "ok"; pill = "✔ Tâche effectuée"; det = `${st.detail} · ${il_y_a(st.at)}`; }
+  }
+  const tags = [];
+  if(extra && extra.a_valider) tags.push(`<span class="tag wait">⏳ ${extra.a_valider} à valider</span>`);
+  if(extra && extra.attendus) tags.push(`<span class="tag att">📬 ${extra.attendus} rendu(s) attendu(s)</span>`);
+  if(extra && extra.absent) tags.push(`<span class="tag abs">🧳 ${esc(extra.absent)}</span>`);
+  const attente = extra && extra.a_valider ? " s-attente" : "";
+  return `<div class="agent s-${etat}${attente}" id="ag-${id}" aria-label="${esc(nom)} : ${esc(pill)}">
+    <div class="av">${avatar(couleur, acc)}</div>
+    <div class="name">${esc(nom)}</div><div class="role">${esc(role)}</div>
+    <div class="pill">${pill}${det ? `<small>${esc(det)}</small>` : ""}</div>
+    ${tags.length ? `<div class="tags">${tags.join("")}</div>` : ""}</div>`;
+}
+
+function dessiner(){
+  const eleves = DATA.eleves || [];
+  const reels = eleves.filter(e => !e.test), tests = eleves.filter(e => e.test);
+  let html = `<svg class="links" id="links"></svg>`;
+  html += `<div class="zone">Direction</div><div class="row">${carte("chef","Chef de projet","coordonne tout",COULEURS.chef,"cravate")}</div>`;
+  html += `<div class="zone">Services</div><div class="row">`
+    + carte("courrier","Courrier","boîte Gmail",COULEURS.courrier,"enveloppe")
+    + carte("messages","Messages","iMessage de Paul",COULEURS.messages,"bulle")
+    + carte("calendrier","Calendrier","cours à venir",COULEURS.calendrier,"agenda")
+    + carte("relecteur","Relecteur","vérifie les calculs",COULEURS.relecteur,"loupe") + `</div>`;
+  html += `<div class="zone">Un agent par élève</div><div class="row">`
+    + reels.map(e => carte(e.slug, e.nom, "suivi et corrections", COULEURS.eleve, "toque", e)).join("")
+    + tests.map(e => carte(e.slug, e.nom + " (test)", "élève fictif", COULEURS.test, "toque", e)).join("") + `</div>`;
+  document.getElementById("map").innerHTML = html;
+  const svg = document.getElementById("links"), map = document.getElementById("map");
+  const mr = map.getBoundingClientRect(), chef = document.getElementById("ag-chef").getBoundingClientRect();
+  svg.setAttribute("viewBox", `0 0 ${mr.width} ${mr.height}`);
+  const cx = chef.left - mr.left + chef.width/2, cy = chef.top - mr.top + chef.height;
+  let lignes = "";
+  map.querySelectorAll(".agent").forEach(a => { if(a.id !== "ag-chef"){ const r = a.getBoundingClientRect();
+    lignes += `<line x1="${cx}" y1="${cy}" x2="${r.left - mr.left + r.width/2}" y2="${r.top - mr.top}"/>`; } });
+  svg.innerHTML = lignes;
+}
+
+function entete(){
+  const b = DATA.lance ? `<span class="badge live">● Projet lancé</span>` : `<span class="badge test">● Mode test : rien ne part vers les élèves</span>`;
+  document.getElementById("badges").innerHTML = b;
+  const parts = [];
+  if(DATA.dernier_bilan) parts.push(`dernier bilan : ${new Date(DATA.dernier_bilan).toLocaleDateString("fr-FR")}`);
+  parts.push(DATA.imessage_ok ? `iMessage lu ${il_y_a(DATA.imessage_ok)}` : "iMessage : accès non confirmé");
+  if(DATA.imessage_attente) parts.push(`${DATA.imessage_attente} envoi(s) iMessage à confirmer`);
+  document.getElementById("sub").textContent = parts.join(" · ");
+  document.getElementById("foot").textContent = SNAP
+    ? "📸 Instantané pris " + il_y_a(DATA.genere) + " · c'est le dernier état connu (si ton Mac est éteint, rien n'a bougé depuis)."
+    : "Page mise à jour " + il_y_a(DATA.genere) + " · se rafraîchit toute seule toutes les 20 s";
+  if(SNAP) document.title = "Instantané · Salle de contrôle";
+}
+
+function flux(){
+  const noms = {chef:"Chef de projet",courrier:"Courrier",messages:"Messages",calendrier:"Calendrier",relecteur:"Relecteur"};
+  (DATA.eleves||[]).forEach(e => noms[e.slug] = e.nom);
+  const ev = DATA.evenements || [];
+  document.getElementById("feed").innerHTML = ev.length ? ev.map(e =>
+    `<div class="ev"><span class="dot d-${e.statut}"></span><div><b>${esc(noms[e.agent]||e.agent)}</b> · ${esc(e.detail)}<div class="t">${il_y_a(e.at)}</div></div></div>`).join("")
+    : `<div class="empty">Aucune activité enregistrée pour l'instant. Elle apparaîtra dès le prochain passage.</div>`;
+}
+
+entete(); dessiner(); flux();
+window.addEventListener("resize", dessiner);
+</script>
+</body>
+</html>
