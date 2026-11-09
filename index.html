@@ -66,11 +66,15 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--pa
 .tab[aria-selected="true"]{color:var(--ink);background:var(--bg)}
 dialog{border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);padding:0;width:min(520px,calc(100vw - 24px));box-shadow:0 20px 60px rgba(0,0,0,.35)}
 dialog::backdrop{background:rgba(0,0,0,.45)}
-form.f{padding:18px;display:grid;gap:12px}
+form.f{padding:18px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 form.f h3{margin:0 0 2px;font-size:18px}
 label{display:grid;gap:4px;font-size:13px;color:var(--muted);font-weight:600}
 input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:10px 12px;min-height:44px;font-size:16px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+form.f label,form.f input,form.f select{min-width:0}
+/* iOS : les champs date/heure ont une largeur propre et débordent sur leur voisin ; on les force à rester dans leur case */
+input[type="date"],input[type="datetime-local"]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;text-align:left;line-height:1.2}
+input[type="date"]::-webkit-date-and-time-value,input[type="datetime-local"]::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:4px}
 .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .seg label{flex:1;display:block;text-align:center;padding:10px;cursor:pointer;color:var(--ink);font-size:15px}
@@ -157,10 +161,8 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
 <dialog id="dlgPaie"><form class="f" method="dialog" id="fPaie">
   <h3>Nouveau paiement</h3>
   <label>Élève<select id="paieEleve" required></select></label>
-  <div class="two">
-    <label>Montant (€)<input id="paieMontant" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
-    <label>Date<input id="paieDate" type="date" required></label>
-  </div>
+  <label>Montant (€)<input id="paieMontant" type="number" inputmode="decimal" min="0.01" step="0.01" required></label>
+  <label>Date<input id="paieDate" type="date" required></label>
   <div class="seg" role="radiogroup" aria-label="Type de paiement">
     <label><input type="radio" name="paieType" value="apres" checked><span>Après les cours</span></label>
     <label><input type="radio" name="paieType" value="avance"><span>D'avance</span></label>
@@ -174,12 +176,12 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
 <dialog id="dlgCours"><form class="f" method="dialog" id="fCours">
   <h3 id="coursTitre">Nouveau cours</h3>
   <label>Élève<select id="coursEleve" required></select></label>
+  <label>Date et heure<input id="coursDebut" type="datetime-local" required></label>
   <div class="two">
-    <label>Date et heure<input id="coursDebut" type="datetime-local" required></label>
     <label>Durée (min)<input id="coursDuree" type="number" inputmode="numeric" min="15" step="15" value="60" required></label>
+    <label>Statut<select id="coursStatut"><option value="fait">Donné</option><option value="prevu">Prévu</option><option value="annule">Annulé</option></select></label>
   </div>
-  <label>Statut<select id="coursStatut"><option value="fait">Donné</option><option value="prevu">Prévu</option><option value="annule">Annulé</option></select></label>
-  <label style="display:flex;gap:10px;align-items:center;grid-template-columns:none"><input id="coursFacture" type="checkbox" checked style="width:auto;min-height:auto"> Facturé (décoche pour un cours offert)</label>
+  <label style="display:flex;gap:12px;align-items:center;color:var(--ink);font-size:15px;font-weight:500"><input id="coursFacture" type="checkbox" checked style="width:22px;height:22px;min-height:0;flex:none"> <span>Facturé (décoche pour un cours offert)</span></label>
   <label>Montant particulier (€, facultatif : remplace le tarif)<input id="coursMontant" type="number" inputmode="decimal" min="0" step="0.01"></label>
   <label>Note (facultatif)<input id="coursNote" type="text" maxlength="200"></label>
   <div class="err-msg" id="coursErr" role="alert"></div>
@@ -205,7 +207,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.4.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.4.1"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
