@@ -98,6 +98,15 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
   </form>
 </section>
 
+<section id="verrou" class="hide" aria-label="Verrouillé" style="max-width:380px;margin:18vh auto 0;padding:0 16px;text-align:center">
+  <div style="font-size:54px" aria-hidden="true">🔒</div>
+  <h1>Mes cours</h1>
+  <p class="sub">Verrouillé. Déverrouille avec Face ID.</p>
+  <button class="btn primary" id="btnDeverrouille" style="width:100%;margin-top:10px">Déverrouiller avec Face ID</button>
+  <div class="err-msg" id="verrouErr" role="alert"></div>
+  <button class="btn small" id="btnMdp" style="margin-top:6px">Utiliser le mot de passe</button>
+</section>
+
 <div id="app" class="hide">
   <header class="top">
     <div>
@@ -135,6 +144,7 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
       <iframe id="dash" title="Salle de contrôle" sandbox="allow-scripts"></iframe>
     </section>
     <p class="sub" id="versionInfo" style="text-align:center;margin:26px 0 8px"></p>
+    <p style="text-align:center;margin:0 0 8px"><button class="btn small" id="btnFaceId" hidden></button></p>
   </main>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
@@ -195,7 +205,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.3.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.4.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
@@ -216,16 +226,64 @@ function toast(t) {
 /* ───────── connexion ───────── */
 async function demarrer() {
   const { data: { session } } = await sb.auth.getSession();
-  if (session) { afficherApp(); await tout(); } else { $("#login").classList.remove("hide"); $("#app").classList.add("hide"); }
+  if (!session) { $("#login").classList.remove("hide"); $("#app").classList.add("hide"); $("#verrou").classList.add("hide"); return; }
+  if (faceIdActif()) { verrouiller(); } else { afficherApp(); await tout(); }
 }
+
+/* ───────── Face ID (verrou de l'appli) ─────────
+   La session Supabase reste ouverte sur l'appareil ; Face ID sert de verrou à l'ouverture (WebAuthn, authentificateur de l'appareil).
+   C'est un verrou local : il empêche quelqu'un qui prend ton téléphone déverrouillé d'ouvrir l'appli, pas un second contrôle côté serveur. */
+const CLE_FACEID = "faceid_cred";
+const b64 = { enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))), dec: (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)) };
+const faceIdActif = () => !!localStorage.getItem(CLE_FACEID);
+async function faceIdDispo() { try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch { return false; } }
+async function majBoutonFaceId() {
+  const b = $("#btnFaceId");
+  if (!(await faceIdDispo())) { b.hidden = true; return; }
+  b.hidden = false; b.textContent = faceIdActif() ? "🔓 Désactiver Face ID" : "🔒 Activer Face ID";
+}
+async function activerFaceId() {
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: "Mes cours", id: location.hostname },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "paul", displayName: "Paul" },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" }, timeout: 60000 } });
+  localStorage.setItem(CLE_FACEID, b64.enc(cred.rawId));
+}
+async function verifierFaceId() {
+  await navigator.credentials.get({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname, userVerification: "required", timeout: 60000,
+    allowCredentials: [{ type: "public-key", id: b64.dec(localStorage.getItem(CLE_FACEID)), transports: ["internal"] }] } });
+}
+function verrouiller() {
+  $("#app").classList.add("hide"); $("#login").classList.add("hide"); $("#verrou").classList.remove("hide"); $("#verrouErr").textContent = "";
+}
+async function deverrouiller() {
+  try { await verifierFaceId(); } catch { $("#verrouErr").textContent = "Face ID n'a pas abouti. Réessaie, ou utilise le mot de passe."; return; }
+  $("#verrou").classList.add("hide"); afficherApp(); await tout();
+}
+$("#btnDeverrouille").addEventListener("click", deverrouiller);
+$("#btnMdp").addEventListener("click", async () => { localStorage.removeItem(CLE_FACEID); await sb.auth.signOut(); location.reload(); });
+$("#btnFaceId").addEventListener("click", async () => {
+  try {
+    if (faceIdActif()) { if (confirm("Désactiver le verrou Face ID ?")) { localStorage.removeItem(CLE_FACEID); toast("Face ID désactivé"); } }
+    else { await activerFaceId(); toast("Face ID activé : l'appli se verrouillera à l'ouverture"); }
+  } catch (e) { toast("Face ID : action annulée ou impossible"); }
+  majBoutonFaceId();
+});
+let masqueDepuis = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { masqueDepuis = Date.now(); return; }
+  if (faceIdActif() && masqueDepuis && Date.now() - masqueDepuis > 2 * 60 * 1000 && !$("#app").classList.contains("hide")) verrouiller();
+});
 $("#loginForm").addEventListener("submit", async (e) => {
   e.preventDefault(); $("#loginErr").textContent = "";
   const { error } = await sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#mdp").value });
   if (error) { $("#loginErr").textContent = "Connexion refusée : vérifie l'adresse et le mot de passe."; return; }
   $("#mdp").value = ""; $("#login").classList.add("hide"); afficherApp(); await tout();
 });
-$("#btnOut").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
-function afficherApp() { $("#login").classList.add("hide"); $("#app").classList.remove("hide"); }
+$("#btnOut").addEventListener("click", async () => { localStorage.removeItem(CLE_FACEID); await sb.auth.signOut(); location.reload(); });
+function afficherApp() { $("#login").classList.add("hide"); $("#verrou").classList.add("hide"); $("#app").classList.remove("hide"); majBoutonFaceId(); }
 
 /* ───────── données ───────── */
 async function tout() {

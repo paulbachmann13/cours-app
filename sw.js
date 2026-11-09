@@ -1,6 +1,6 @@
 // Service worker : garde l'enveloppe de l'appli (pas les données) pour un démarrage instantané.
 // Les données viennent toujours de Supabase, jamais du cache.
-const VERSION = "v1.3.0";
+const VERSION = "v1.4.0";
 const FICHIERS = ["./", "index.html", "dashboard-modele.html", "icon.svg", "manifest.webmanifest"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FICHIERS))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
