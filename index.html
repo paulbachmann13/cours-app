@@ -105,6 +105,7 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
       <div class="sub" id="sousTitre"></div>
     </div>
     <div style="display:flex;gap:8px">
+      <button class="btn small" id="btnRefresh" aria-label="Actualiser les données et chercher une nouvelle version">↻</button>
       <button class="btn small" id="btnRegl" aria-label="Réglages des tarifs">⚙︎ Tarifs</button>
       <button class="btn small" id="btnOut" aria-label="Se déconnecter">Quitter</button>
     </div>
@@ -133,6 +134,7 @@ iframe#dash{width:100%;border:0;border-radius:16px;background:var(--panel);min-h
       <div class="sub" id="bordInfo" style="margin-bottom:8px"></div>
       <iframe id="dash" title="Salle de contrôle" sandbox="allow-scripts"></iframe>
     </section>
+    <p class="sub" id="versionInfo" style="text-align:center;margin:26px 0 8px"></p>
   </main>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
@@ -192,6 +194,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+const APP_VERSION = "1.1.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
 const eur = (c) => (c / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -394,6 +399,25 @@ document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () 
 }));
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("#app").classList.contains("hide")) tout(); });
+
+/* ───────── actualiser + version ───────── */
+const majVersion = (t) => { $("#versionInfo").textContent = `Version ${APP_VERSION} · ${APP_DATE}${t ? " · " + t : ""}`; };
+majVersion();
+$("#btnRefresh").addEventListener("click", async () => {
+  const b = $("#btnRefresh"); b.disabled = true; toast("Actualisation…");
+  try {
+    // dernière version publiée de la page (le cache de l'appli est vidé) puis rechargement
+    const reps = await navigator.serviceWorker?.getRegistrations?.() ?? [];
+    await Promise.all(reps.map((r) => r.unregister()));
+    for (const k of await caches.keys()) await caches.delete(k);
+    const html = await (await fetch("index.html", { cache: "no-store" })).text();
+    const v = html.match(/APP_VERSION = "([^"]+)"/)?.[1];
+    if (v && v !== APP_VERSION) { toast(`Nouvelle version ${v} : rechargement…`); setTimeout(() => location.reload(), 600); return; }
+    await tout(); if (!$("#p-bord").classList.contains("hide")) await chargerDash();
+    majVersion("à jour, données actualisées " + heure(new Date())); toast("À jour");
+  } catch (e) { toast("Actualisation impossible : " + (e.message || e)); }
+  b.disabled = false;
+});
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 demarrer();
