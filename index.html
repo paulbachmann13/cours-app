@@ -209,7 +209,7 @@ const SUPABASE_URL = "https://zohqpnheexueitjohpet.supabase.co";
 const SUPABASE_KEY = "sb_publishable_3dcCmqwWQ7cZlo4VeBSSog_0xKHLY-U"; // clé publique : seule la connexion de Paul ouvre les données
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const APP_VERSION = "1.5.0"; // à changer à chaque mise à jour (et VERSION dans sw.js)
+const APP_VERSION = "1.5.1"; // à changer à chaque mise à jour (et VERSION dans sw.js)
 const APP_DATE = "9 nov. 2026";
 
 const $ = (s) => document.querySelector(s);
@@ -419,7 +419,7 @@ function dessinerCours() {
   const paie = etatsPaiement();
   l.innerHTML = cours.length ? cours.map((c) => {
     const passe = new Date(c.debut).getTime() < maintenant;
-    let etat = c.statut === "annule" ? `<span class="chip err">Annulé</span>`
+    let etat = c.statut === "annule" ? (/déplac/i.test(c.note || "") ? `<span class="chip warn">Déplacé</span>` : `<span class="chip err">Annulé</span>`)
       : !c.facture ? `<span class="chip warn">Offert</span>`
       : (c.statut === "fait" || passe) ? `<span class="chip ok">Donné</span>` : `<span class="chip">Prévu</span>`;
     return `<button class="item" style="width:100%;background:none;border:0;border-top:1px solid var(--line);text-align:left;color:inherit" data-cours="${c.id}">
